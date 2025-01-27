@@ -1,0 +1,45 @@
+{{page-title (capitalize @model.title)}}
+<div class="d-flex justify-content-between p-2">
+  <h3>{{capitalize @model.title}}</h3>
+  <LinkTo
+    class="btn btn-outline-primary"
+    @route="todo-list.detail.new-todo"
+  >Ajouter un Todo</LinkTo>
+</div>
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Titre</th>
+      <th>Finie?</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#unless @model.todos}}
+      <tr>
+        <td class="bg-light" colspan="2">Pas de todo pour l'instant</td>
+      </tr>
+    {{/unless}}
+    {{#each @model.todos as |todo|}}
+      <tr>
+        <td>{{capitalize todo.title}}</td>
+        <td>{{#if todo.checked}} Oui {{else}} Non {{/if}}</td>
+        <td>
+          <div class="d-inline-flex">
+            <button
+              {{on "click" (fn this.toggleCheck todo)}}
+              class="btn btn-link text-info"
+              type="button"
+            >{{#if todo.checked}} Pas finie {{else}} Finie {{/if}}</button>
+            <button
+              {{on "click" (fn this.delete todo)}}
+              class="btn btn-link text-danger"
+              type="button"
+            >Supprimer</button>
+          </div>
+
+        </td>
+      </tr>
+    {{/each}}
+  </tbody>
+</table>

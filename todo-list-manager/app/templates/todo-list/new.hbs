@@ -1,0 +1,39 @@
+{{page-title "Nouvelle Liste"}}
+
+<form novalidate>
+  <div class="card">
+    <div class="card-header bg-transparent">Nouvelle liste</div>
+    <div class="card-body">
+      {{#let @model.error.title as |isInvalid|}}
+        <div class="mb-3">
+          <label for="exampleFormControlInput1" class="form-label">Titre</label>
+          <div class="has-validation">
+            <input
+              type="text"
+              class={{(concat "form-control " (if isInvalid "is-invalid" ""))}}
+              id="title"
+              placeholder="Titre"
+              {{on "input" this.updateTitle}}
+            />
+            {{#if isInvalid}}
+              <div class="invalid-feedback">
+                {{@model.error.title.message}}
+              </div>
+            {{/if}}
+          </div>
+
+        </div>
+      {{/let}}
+
+    </div>
+    <div class="card-footer">
+      <button
+        class="btn btn-success mt-1"
+        type="submit"
+        {{on "click" this.save}}
+      >Sauvegarder</button>
+
+    </div>
+  </div>
+
+</form>

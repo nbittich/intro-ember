@@ -1,0 +1,40 @@
+{{page-title "List"}}
+<div class="d-flex justify-content-between p-2">
+  <h3>Mes listes Todo's</h3>
+  <LinkTo class="btn btn-outline-primary" @route="todo-list.new">Nouvelle Liste</LinkTo>
+</div>
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Titre</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#unless @model.todoLists}}
+      <tr>
+        <td class="bg-light" colspan="2">Pas de liste pour l'instant</td>
+      </tr>
+    {{/unless}}
+    {{#each @model.todoLists as |todoList|}}
+      <tr>
+        <td>{{capitalize todoList.title}}</td>
+        <td>
+          <div class="d-inline-flex">
+            <LinkTo
+              class="btn btn-link me-1"
+              @route="todo-list.detail"
+              @model={{todoList}}
+            >Détail</LinkTo>
+            <button
+              {{on "click" (fn this.delete todoList)}}
+              class="btn btn-link text-danger"
+              type="button"
+            >Supprimer</button>
+          </div>
+        </td>
+      </tr>
+    {{/each}}
+  </tbody>
+
+</table>

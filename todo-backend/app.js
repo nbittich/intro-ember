@@ -1,39 +1,81 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Serializer } = require('jsonapi-serializer');
-
+const { v4: uuid } = require('uuid');
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({
+  type: function (req) {
+    return req.get("content-type") === 'application/vnd.api+json';
+  },
+}));
+app.use(bodyParser.urlencoded({ extended: true }));
+let newTodos = [];
+let todoLists = [];
 
-const todoLists = [];
-
-const todoListSerializer = new Serializer('todo-lists', {
-  attributes: ['title', 'todos'],
-  todos: {
-    ref: 'id',
-    attributes: ['title', 'checked']
+function serializeTodo(todo) {
+  return {
+    type: "todos",
+    id: todo.id,
+    attributes: {
+      title: todo.title,
+      checked: todo.checked
+    }
   }
-});
+}
+function serializeTodoList(todoList) {
+  let response = {
+    type: "todo-lists",
+    id: todoList.id,
+    attributes: {
+      title: todoList.title
+    },
+    relationships: {
+      todos: {
+        links: { related: `/todo-lists/${todoList.id}/todos` },
+      }
+    },
+  };
 
-const todoSerializer = new Serializer('todos', {
-  attributes: ['title', 'checked']
-});
+  return response;
+
+}
+function serializeTodoLists(todoLists) {
+  let response = {
+    data: todoLists.map(todoList => serializeTodoList(todoList))
+  };
+
+  return response;
+
+}
+
 
 app.get('/todo-lists', (req, res) => {
   const { filter } = req.query;
+
+  let serializedData;
   if (filter && filter.title) {
     const filteredTodolists = todoLists.filter(todolist =>
       todolist.title.toLowerCase().includes(filter.title.toLowerCase())
     );
 
-    const serializedTodolists = todoListSerializer.serialize(filteredTodolists);
-    return res.status(200).json(serializedTodolists);
+    serializedData = serializeTodoLists(filteredTodolists);
+  } else {
+    serializedData = serializeTodoLists(todoLists);
   }
 
-  const serializedTodolists = todoListSerializer.serialize(todoLists);
-  res.status(200).json(serializedTodolists);
+  res.status(200).json(serializedData);
 });
 
+app.get('/todo-lists/:todolistId/todos', (req, res) => {
+  const { todolistId } = req.params;
+
+  const todolist = todoLists.find(t => t.id === todolistId);
+  if (!todolist) {
+    return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
+  }
+
+  const serializedTodos = { data: todolist.todos.map(todo => serializeTodo(todo)) };
+  res.status(200).json(serializedTodos);
+});
 
 app.post('/todo-lists', (req, res) => {
   const { title } = req.body.data.attributes;
@@ -41,37 +83,45 @@ app.post('/todo-lists', (req, res) => {
     return res.status(400).json({ errors: [{ title: 'Title is required' }] });
   }
 
-  const todolist = { id: String(todoLists.length + 1), title, todos: [] };
+  const todolist = { id: uuid(), title, todos: [] };
   todoLists.push(todolist);
-  const serializedTodolist = todoListSerializer.serialize(todolist);
-  res.status(201).json(serializedTodolist);
+
+  res.status(201).json({ data: serializeTodoList(todolist) });
 });
 
-app.post('/todo-lists/:todolistId/todos', (req, res) => {
-  const { todolistId } = req.params;
+app.post('/todos', (req, res) => {
   const { title } = req.body.data.attributes;
+  if (!title) {
+    return res.status(400).json({ errors: [{ title: 'Title is required' }] });
+  }
 
-  const todolist = todoLists.find(t => t.id === todolistId);
+  const todo = { id: uuid(), title, checked: false };
+  newTodos.push(todo);
+
+  res.status(201).json({ data: serializeTodo(todo) });
+});
+app.patch('/todo-lists/:todoListId', (req, res) => {
+  const { todoListId } = req.params;
+  const { title, } = req.body.data.attributes;
+  let todos = req.body.data.relationships.todos.data;
+
+  const todolist = todoLists.find(t => t.id == todoListId);
   if (!todolist) {
     return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
   }
 
-  if (!title) {
-    return res.status(400).json({ errors: [{ title: 'Todo title is required' }] });
-  }
-
-  const todo = { id: String(todolist.todos.length + 1), title, checked: false };
-  todolist.todos.push(todo);
-
-  const serializedTodo = todoSerializer.serialize(todo);
-  res.status(201).json(serializedTodo);
+  todolist.title = title;
+  const newTodoLinks = newTodos.filter(nt => todos.some(t => t.id === nt.id));
+  newTodos = newTodos.filter(nt => !todos.some(t => t.id === nt.id));
+  todolist.todos = [...new Set([...newTodoLinks, ...todolist.todos])];
+  const serializedTodoList = { data: serializeTodoList(todolist) };
+  res.status(200).json(serializedTodoList);
 });
+app.patch('/todos/:todoId', (req, res) => {
+  const { todoId } = req.params;
+  const { checked, title } = req.body.data.attributes;
 
-
-app.patch('/todo-lists/:todolistId/todos/:todoId/checked', (req, res) => {
-  const { todolistId, todoId } = req.params;
-
-  const todolist = todoLists.find(t => t.id === todolistId);
+  const todolist = todoLists.find(t => t.todos.some(todo => todo.id === todoId));
   if (!todolist) {
     return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
   }
@@ -81,53 +131,27 @@ app.patch('/todo-lists/:todolistId/todos/:todoId/checked', (req, res) => {
     return res.status(404).json({ errors: [{ title: 'Todo not found' }] });
   }
 
-  todo.checked = !todo.checked;
-  const serializedTodo = todoSerializer.serialize(todo);
+  todo.checked = checked;
+  todo.title = title;
+  const serializedTodo = { data: serializeTodo(todo) };
   res.status(200).json(serializedTodo);
 });
-
-
-app.patch('/todo-lists/:todolistId/checked', (req, res) => {
-  const { todolistId } = req.params;
-
-  const todolist = todoLists.find(t => t.id === todolistId);
-  if (!todolist) {
-    return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
-  }
-
-  todolist.todos.forEach(todo => (todo.checked = true));
-  const serializedTodolist = todoListSerializer.serialize(todolist);
-  res.status(200).json(serializedTodolist);
-});
-
-
-app.delete('/todo-lists/:todolistId/todos/:todoId', (req, res) => {
-  const { todolistId, todoId } = req.params;
-
-  const todolist = todoLists.find(t => t.id === todolistId);
-  if (!todolist) {
-    return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
-  }
-
-  const todoIndex = todolist.todos.findIndex(t => t.id === todoId);
-  if (todoIndex === -1) {
-    return res.status(404).json({ errors: [{ title: 'Todo not found' }] });
-  }
-
-  todolist.todos.splice(todoIndex, 1);
-  res.status(204).send();
-});
-
 
 app.delete('/todo-lists/:todolistId', (req, res) => {
   const { todolistId } = req.params;
 
-  const todolistIndex = todoLists.findIndex(t => t.id === todolistId);
-  if (todolistIndex === -1) {
+  todoLists = todoLists.filter(tl => tl.id !== todolistId)
+  res.status(204).send();
+});
+app.delete('/todos/:todoId', (req, res) => {
+  const { todoId } = req.params;
+
+  const todolist = todoLists.find(t => t.todos.some(todo => todo.id === todoId));
+
+  if (!todolist) {
     return res.status(404).json({ errors: [{ title: 'Todolist not found' }] });
   }
-
-  todoLists.splice(todolistIndex, 1);
+  todolist.todos = todolist.todos.filter(t => t.id !== todoId);
   res.status(204).send();
 });
 

@@ -7,5 +7,10 @@ export default class Router extends EmberRouter {
 }
 
 Router.map(function () {
-  // Add route declarations here
+  this.route('todo-list', function () {
+    this.route('new');
+    this.route('detail', { path: '/:id' }, function () {
+      this.route('new-todo');
+    });
+  });
 });
